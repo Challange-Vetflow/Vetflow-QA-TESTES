@@ -1,0 +1,872 @@
+{
+  "info": {
+    "name": "VetFlow - Testes Automatizados de API (QA Sprint 4)",
+    "description": "Testes automatizados (Postman + Newman) da API Java do VetFlow. Ordem: rode as pastas de cima para baixo. Cada execução cria dados novos (e-mail de tutor único).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{vetEmail}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{vetPassword}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://vetflow-java.onrender.com"
+    },
+    {
+      "key": "vetEmail",
+      "value": "vet@vetflow.com"
+    },
+    {
+      "key": "vetPassword",
+      "value": "senha123"
+    },
+    {
+      "key": "tutorEmail",
+      "value": ""
+    },
+    {
+      "key": "tutorPassword",
+      "value": ""
+    },
+    {
+      "key": "tutorId",
+      "value": ""
+    },
+    {
+      "key": "petId",
+      "value": ""
+    },
+    {
+      "key": "clinicId",
+      "value": ""
+    },
+    {
+      "key": "appointmentId",
+      "value": ""
+    },
+    {
+      "key": "dataFutura",
+      "value": ""
+    },
+    {
+      "key": "medicationId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Autenticação e cadastro",
+      "item": [
+        {
+          "name": "TC01 - Cadastro de tutor (auto-cadastro)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tutor Teste\",\n  \"email\": \"{{tutorEmail}}\",\n  \"phone\": \"11999990000\",\n  \"password\": \"{{tutorPassword}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('tutorEmail', 'tutor.' + Date.now() + '@example.com');",
+                  "pm.collectionVariables.set('tutorPassword', 'senha123');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC01: Criar tutor e usuário na mesma transação via procedures.",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Retorna TUTOR com tutorId', () => { const b = pm.response.json(); pm.expect(b.role).to.eql('TUTOR'); pm.expect(b.tutorId).to.be.a('string'); });",
+                  "pm.collectionVariables.set('tutorId', pm.response.json().tutorId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC02 - E-mail duplicado no cadastro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tutor Duplicado\",\n  \"email\": \"{{tutorEmail}}\",\n  \"phone\": \"11999990001\",\n  \"password\": \"senha123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC02: Garantir que o banco bloqueia e-mail repetido (ORA-20001).",
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Mensagem informa conta já cadastrada', () => pm.expect(pm.response.json().mensagem).to.include('cadastrad'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC03 - Login do tutor e dados da sessão",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{tutorEmail}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{tutorPassword}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC03: Validar autenticação do tutor e o perfil retornado.",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Retorna o próprio tutor', () => { const b = pm.response.json(); pm.expect(b.email).to.eql(pm.collectionVariables.get('tutorEmail')); pm.expect(b.role).to.eql('TUTOR'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC04 - Login com senha incorreta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tutorEmail}}\",\n  \"senha\": \"senha-errada\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC04: Garantir que credenciais inválidas são recusadas.",
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Controle de acesso e pets",
+      "item": [
+        {
+          "name": "TC05 - Tutor não acessa a lista de tutores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tutors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tutors"
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{tutorEmail}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{tutorPassword}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC05: Validar controle de acesso por perfil (apenas VET).",
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC06 - Veterinária cadastra pet para um tutor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pets"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Thor\",\n  \"species\": \"DOG\",\n  \"breed\": \"Labrador\",\n  \"birthDate\": \"2020-05-10\",\n  \"weightKg\": 28.5,\n  \"tutorId\": \"{{tutorId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC06: Cadastro de pet via SP_INSERT_PET com regras de dados válidos.",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Pet vinculado ao tutor', () => { const b = pm.response.json(); pm.expect(b.tutorId).to.eql(pm.collectionVariables.get('tutorId')); pm.expect(b.weightKg).to.eql(28.5); });",
+                  "pm.collectionVariables.set('petId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC07 - Peso inválido bloqueado antes do banco",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pets"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Peso Zero\",\n  \"species\": \"CAT\",\n  \"birthDate\": \"2021-01-01\",\n  \"weightKg\": 0,\n  \"tutorId\": \"{{tutorId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC07: Validação de Bean Validation: peso deve ser maior que zero.",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC08 - Pet com tutor inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pets"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fantasma\",\n  \"species\": \"DOG\",\n  \"birthDate\": \"2020-01-01\",\n  \"weightKg\": 5,\n  \"tutorId\": \"00000000-0000-0000-0000-000000000000\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC08: Garantir que o banco rejeita tutor que não existe (ORA-20003).",
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC09 - Tutor cadastra pet para si mesmo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pets"
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{tutorEmail}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{tutorPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mel\",\n  \"species\": \"CAT\",\n  \"breed\": \"SRD\",\n  \"birthDate\": \"2022-03-15\",\n  \"weightKg\": 4.2\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC09: Tutor cria pet e o vínculo é forçado ao próprio tutor logado.",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Vinculado ao tutor logado', () => pm.expect(pm.response.json().tutorId).to.eql(pm.collectionVariables.get('tutorId')));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Clínicas e consultas",
+      "item": [
+        {
+          "name": "TC10 - Cadastro de clínica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clinics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "clinics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Clínica Teste Vetflow\",\n  \"address\": \"Av. Paulista, 1000\",\n  \"phone\": \"1130000000\",\n  \"email\": \"clinica.teste@example.com\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC10: Veterinária cadastra clínica parceira via SP_INSERT_CLINIC.",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('clinicId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC11 - Agendar consulta futura",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": \"{{petId}}\",\n  \"clinicId\": \"{{clinicId}}\",\n  \"scheduledAt\": \"{{dataFutura}}\",\n  \"type\": \"CHECKUP\",\n  \"notes\": \"Check-up anual\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = new Date(Date.now() + 7*24*3600*1000);",
+                  "const p = n => String(n).padStart(2,'0');",
+                  "pm.collectionVariables.set('dataFutura', `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T10:00:00`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC11: Agendamento via SP_INSERT_APPOINTMENT (data deve ser futura).",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Consulta não concluída', () => pm.expect(pm.response.json().completed).to.eql(false));",
+                  "pm.collectionVariables.set('appointmentId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC12 - Marcar consulta como realizada",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "appointments",
+                "{{appointmentId}}",
+                "complete"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC12: Veterinária conclui a consulta agendada.",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Consulta concluída', () => pm.expect(pm.response.json().completed).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vacinas e medicamentos",
+      "item": [
+        {
+          "name": "TC13 - Próxima dose antes da aplicação",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vaccines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vaccines"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": \"{{petId}}\",\n  \"vaccineName\": \"V10\",\n  \"appliedAt\": \"2026-03-10\",\n  \"nextDoseAt\": \"2026-03-01\",\n  \"batch\": \"L123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC13: Regra de negócio no banco: próxima dose deve ser posterior à aplicação (ORA-20004).",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC14 - Registrar vacina válida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vaccines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vaccines"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": \"{{petId}}\",\n  \"vaccineName\": \"Antirrábica\",\n  \"appliedAt\": \"2026-03-10\",\n  \"nextDoseAt\": \"2027-03-10\",\n  \"batch\": \"L456\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC14: Vacina registrada via SP_INSERT_VACCINE.",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC14B - Vacina aparece no prontuário do pet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vaccines/by-pet/{{petId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vaccines",
+                "by-pet",
+                "{{petId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC14B: Confirma por requisição normal que a vacina registrada aparece no prontuário.",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Vacina listada no prontuário', () => pm.expect(pm.response.json().some(v => v.vaccineName === 'Antirrábica')).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC15 - Prescrever e suspender medicamento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/medications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "medications"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": \"{{petId}}\",\n  \"name\": \"Amoxicilina\",\n  \"dosage\": \"250 mg\",\n  \"frequency\": \"12/12h\",\n  \"startDate\": \"2026-03-10\",\n  \"endDate\": \"2026-03-20\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC15: Prescrição via SP_INSERT_MEDICATION e mudança de status.",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Começa ACTIVE', () => pm.expect(pm.response.json().status).to.eql('ACTIVE'));",
+                  "pm.collectionVariables.set('medicationId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC16 - Suspender medicamento em uso",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/medications/{{medicationId}}/suspend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "medications",
+                "{{medicationId}}",
+                "suspend"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC16: Transição de status ACTIVE -> SUSPENDED.",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status SUSPENDED', () => pm.expect(pm.response.json().status).to.eql('SUSPENDED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Relatórios PL/SQL",
+      "item": [
+        {
+          "name": "TC17 - Relatório clínico restrito à veterinária",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/resumo-clinico",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "resumo-clinico"
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{tutorEmail}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{tutorPassword}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC17: Relatório PL/SQL disponível só para VET; tutor recebe 403.",
+                  "pm.test('Tutor recebe 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC18 - Relatório clínico pela veterinária",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/resumo-clinico",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "resumo-clinico"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// TC18: SP_RESUMO_CLINICO retorna dados para a clínica.",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta contém indicadores', () => { const b = pm.response.json(); pm.expect(b).to.be.an('object'); pm.expect(b.petsAtivos).to.be.a('number'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
